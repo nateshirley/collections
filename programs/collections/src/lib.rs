@@ -22,6 +22,75 @@ pub mod collections {
     pub fn pass_collector(ctx: Context<PassCollector>) -> ProgramResult {
         Ok(())
     }
+
+    pub fn do_something_for_culture(ctx: Context<DoSomething>) -> ProgramResult {
+        if let Some(mint) = ctx.accounts.culture.mint {
+            //verify_member_for_mint
+            verify_member_for_mint(&ctx.accounts.token_account, &mint)?;
+        } else if let Some(collection) = ctx.accounts.culture.collection {
+            //verify member for collection
+            verify_member_for_collection(
+                &ctx.accounts.token_account,
+                &collection,
+                ctx.remaining_accounts,
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+pub fn verify_member_for_mint(
+    token_account: &Account<token::TokenAccount>,
+    mint: &Pubkey,
+) -> ProgramResult {
+    assert_eq!(token_account.mint, *mint);
+    Ok(())
+}
+
+pub fn verify_member_for_collection(
+    token_account: &Account<token::TokenAccount>,
+    collection: &Pubkey,
+    remaining_accounts: &[AccountInfo],
+) -> ProgramResult {
+    let collection_attribution =
+        Account::<CollectionAttribution>::try_from(&remaining_accounts[0])?;
+    //make sure the collection on the culture is the same as the collection passed in remaining accounts
+    assert_eq!(*collection, collection_attribution.collection);
+    let address = Pubkey::create_program_address(
+        &[
+            COLLECTION_ATTRIBUTION_SEED,
+            token_account.mint.as_ref(),
+            &[collection_attribution.bump],
+        ],
+        &id(),
+    )?;
+    //make sure the collection attribution matches the mint on the token account
+    assert_eq!(collection, address);
+    //token acct owner verified in the ix header
+    Ok(())
+}
+
+/*
+problem with this is im not sure we can deal with collections/tokens the same way
+we are gonna require you to stake your tokens to get back gTokens
+should we do the same for collections?
+this would actually make it much easier if i can figure out a way to verify staked tokens that is universal across both
+what's the most normal way to verify staked tokens?
+look in spl governance
+on spl governance he makes an account called TokenOwner where he stores deposit amount
+https://github.com/solana-labs/solana-program-library/blob/master/governance/program/src/state/token_owner_record.rs#L28
+seeds based on owner i.e., wallet
+so i could put it in the membership account -- staked tokens. this would consume the membership, which is probably fine.
+if i wanted to get real aggressive i could give back a staked membership card
+but will probably just stick to returning gTokens
+*/
+
+#[derive(Accounts)]
+pub struct DoSomething<'info> {
+    member: Signer<'info>,
+    token_account: Account<'info, token::TokenAccount>,
+    culture: Account<'info, Culture>,
 }
 
 #[derive(Accounts)]
