@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token;
 // use spl_token_metadata::state::Creator;
 declare_id!("G3am3SCcStwk8gCXfVEADAnjgBRDRHv6ap7QXjKjQstq");
 
@@ -17,6 +18,40 @@ pub mod collections {
         ctx.accounts.collection.name = name.to_verified_seed();
         Ok(())
     }
+
+    pub fn pass_collector(ctx: Context<PassCollector>) -> ProgramResult {
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct PassCollector<'info> {
+    collection: Account<'info, Collection>,
+    collector: Signer<'info>,
+    #[account(
+        constraint = token_account.owner == collector.key(),
+    )]
+    token_account: Account<'info, token::TokenAccount>,
+    //can probably replace collection account in a lot of them w/ the collection stored in a culture
+    //or if working with a custom program u can just hardcode it
+    #[account(
+        seeds = [COLLECTION_ATTRIBUTION_SEED, token_account.mint.as_ref()],
+        bump = collection_attribution.bump,
+        constraint = collection_attribution.collection == collection.key()
+    )]
+    collection_attribution: Account<'info, CollectionAttribution>,
+    /*
+    this is all u need to verify a user holds an item in a collection
+    - token account owned by signer
+    - token account is a mint w/ attribution for the intended collection
+    - it's just one extra account to pass (attribution)
+    - i could probably even build the cultures program as one and just allow for separate ixns headers for each collection vs token
+    - is there a way to do it without even passing the collection_attr account (i don't think so)
+    - other option is to pass collection_attr in remaining accounts and then pull it to verify if the culture is run with a collection
+    - i thnk maybe that would be best
+    - if there is a remaining account, u just deserialize it into a collection_attr and verify it
+    - otherwise idk
+    */
 }
 
 #[derive(Accounts)]
@@ -46,6 +81,14 @@ pub struct Collection {
     pub creators: Option<Vec<Creator>>,
     pub bump: u8,
 }
+
+#[account]
+pub struct Culture {
+    pub name: String,
+    pub mint: Option<Pubkey>,
+    pub collection: Option<Pubkey>,
+}
+//so then for every thing u pass in, u verify on a tree if it's mint or collection
 
 //pda from ["c_attr", mint.key()]
 //this is how u know a mint belongs to a collection
